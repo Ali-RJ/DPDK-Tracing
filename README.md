@@ -247,3 +247,315 @@ Clean up:
 ```bash
 sudo lttng destroy --all
 ```
+
+# 4. Analysis
+
+# 4.1. Counters graph
+
+![Counters-1](./pics/Counters-1.png "Counters Graph")
+
+**What Do the Spikes in thread_cache_misses Show?**
+
+1. Initial Spike (Cold Start / Initialization)
+    * Timeframe: At the start of the trace (~12:05:16.360), there’s a very sharp spike to ~1.6k misses.
+
+    * Possible Causes:
+
+        * Process or thread start-up: New threads or processes are initialized, and their working sets are not yet loaded into cache.
+
+        * Cache cold state: CPU caches start empty. Any early memory accesses will cause misses until the caches are populated.
+
+        * Context switch or thread migration: The thread might be moved between cores, invalidating its cache content.
+
+        * Large memory reads: A burst of memory access from a freshly allocated region not yet in cache.
+
+2. Baseline Activity (Steady State)
+    * After the spike, cache misses drop significantly but remain non-zero and spiky, which is normal under moderate load.
+
+    * Ongoing causes:
+
+        * Random access patterns: These are inefficient for caches.
+
+        * Working set exceeds cache size: Your data set is too large for L1/L2 caches, leading to regular evictions.
+
+        * False sharing: Multiple threads access adjacent cache lines, invalidating them across cores.
+
+# Thread Cycles and Instructions
+
+![Counters-8](./pics/Counters-8.png "Counters Graph")
+
+
+
+## Chart Description
+
+
+- **X-axis**: Time (in milliseconds)
+- **Y-axis**: Function call activity, in the range of 0 to 1,000,000
+- **Colors**:
+  - **Green & Magenta**: High-activity functions, possibly representing function entry and exit pairs
+  - **Red/Brown**: Consistent, lower-frequency function activity
+  - **Blue/Vertical Spikes**: Isolated initialization or event triggers
+
+---
+
+## Analysis
+
+###  High Call Frequency
+- The green and magenta lines indicate intense function call activity — consistent with DPDK's polling-based packet processing model.
+- Peak activity reaches around **850k–950k**, suggesting rapid burst handling, likely in RX/TX loops.
+
+###  Function Entry/Exit Symmetry
+- The alignment of green and magenta traces suggests paired function entry and exit instrumentation.
+- The dense overlapping implies repeated calls to a small number of hot-path functions.
+
+###  Idle Periods and Drops
+- Frequent sharp drops to near-zero indicate brief idle moments or lack of packets.
+- This may reflect:
+  - Packet burst boundaries
+  - Polling with empty queues
+  - Thread yielding or waiting
+
+###  Stable Thread Patterns
+- The red/brown trace (~250k) is mostly flat, possibly corresponding to:
+  - A management thread (e.g., statistics or timer handling)
+  - A memif control socket thread
+- It shows minimal variance, suggesting periodic or event-driven activity.
+
+###  Warm-Up Phase
+- The far left shows vertical spike lines and unstable behavior during startup (~12:05:16.360–370).
+- This corresponds to application initialization, memif socket creation, and first packet flows.
+
+###  Post-Warm-Up Stability
+- From ~12:05:16.380 onwards, the system stabilizes into a repeating pattern, indicating consistent forwarding or traffic load.
+
+---
+
+## Conclusion
+
+This chart confirms that:
+- The memif interface is active and processing packets.
+- DPDK's main loop is performing as expected under polling.
+- There are clear phases: **startup**, **warm-up**, and **steady-state processing**.
+- Thread-level distinctions in activity can be observed via the amplitude and regularity of plotted lines.
+
+---
+
+
+
+# 4.2 Descriptive Statistics
+![Counters-3](./pics/Counters-3.png "Counters Graph")
+
+
+
+## Key Metrics
+
+| Metric               | Value          |
+|----------------------|----------------|
+| Total execution time | 3.509 seconds  |
+| Function calls       | 5,714,438      |
+| Average latency      | 614 ns         |
+| Maximum latency      | 200.339 ms     |
+
+## Top Functions by Execution Time
+
+1. `eth_memif_rx` - 1.052s (30% of total)
+2. `0x55fb3fa10790` (unresolved) - 1.081s (30%)
+3. `rte_pktmbuf_data_room_memif_get_ring_from_qu` - 824.97ms (23.5%)
+4. `rte_mempool_get_priv` - 276.083ms (7.9%)
+
+## Performance Observations
+
+### Normal Operation
+- Most functions execute in sub-microsecond times (optimal for DPDK)
+- Selection subset shows consistent performance (<2μs with low deviation)
+
+### Anomalies
+- Extreme outlier: 200.339ms in unresolved function `0x55fb3fa10790`
+- High standard deviation (248.295μs) in unresolved function `0x55fb3fa10790`
+- `rte_mempool_get_priv` shows 96μs maximum latency (potential contention)
+
+## Potential Issues
+
+1. **System Interference**
+   - 200ms latency suggests possible:
+     - Scheduling delays
+     - Interrupt storms
+     - Memory pressure events
+
+2. **Symbol Resolution**
+   - Unresolved function symbols limit analysis depth
+
+3. **Memory Pool Operations**
+   - Variance in mempool operations may indicate:
+     - Cache misses
+     - Core contention
+     - Buffer starvation
+
+## Recommendations
+
+1. **Improve Tracing Setup**
+   - Install debug symbols for complete function resolution
+   - Consider more targeted tracing (reduce instrumentation overhead)
+
+2. **System Configuration**
+   - Isolate cores for DPDK threads
+   - Check for NUMA misconfiguration
+   - Verify IRQ balancing
+
+3. **DPDK Tuning**
+   - Adjust mempool cache sizes
+   - Review memif ring configuration
+   - Consider increasing mbuf cache size
+
+4. **Further Investigation**
+   - Correlate with system-wide metrics (CPU, interrupts, memory)
+   - Capture longer traces to identify outlier patterns
+   - Compare with perf or VTune profiles
+
+## Trace Summary Table
+
+| Level/Function          | Min    | Max       | Avg   | Std Dev    | Count    | Total     |
+|-------------------------|--------|-----------|-------|------------|----------|-----------|
+| **Total**               | 1ns    | 200.339ms | 614ns | 83.809μs   | 5,714,438| 3.509s    |
+| eth_memif_rx            | 186ns  | 100.17μs  | 1.353μs| 555ns     | 777,594  | 1.052s    |
+| 0x55fb3fa10790          | 1.188μs| 200.339ms | 1.66μs| 248.295μs  | 651,016  | 1.081s    |
+| rte_pktmbuf_data_room...| 501ns  | 94.809μs  | 577ns | 347ns      | 1,428,609| 824.97ms  |
+| rte_mempool_get_priv    | 1ns    | 96.386μs  | 193ns | 185ns      | 1,428,610| 276.083ms |
+
+# 4.3 wighted tree viewer
+
+![Counters-4](./pics/Counters-4.png "Counters Graph")
+
+
+| Thread          | Function               | Duration   | Self Time  | Calls     |
+|-----------------|------------------------|------------|------------|-----------|
+| dpdk-worker3    | 0x55fb3fa10790         | 1.081 s    | 579.752 ms | 651 k     |
+| dpdk-worker3    | rte_pktmbuf_data_room_size  | 375.411 ms | 250.592 ms | 651 k     |
+| dpdk-worker3    | rte_mempool_get_priv      | 124.82 ms  | 124.82 ms  | 651 k     |
+| dpdk-worker3    | memif_get_ring_from_queue   | 125.772 ms | 125.772 ms | 651 k     |
+| dpdk-worker1    | eth_memif_rx           | 1.052 s    | 452.426 ms | 777.6 k   |
+| dpdk-worker1    | rte_pktmbuf_data_room_size  | 449.557 ms | 299.796 ms | 777.6 k   |
+| dpdk-worker1    | rte_mempool_get_priv      | 149.761 ms | 149.761 ms | 777.6 k   |
+| dpdk-worker1    | memif_get_ring_from_queue   | 150.311 ms | 150.311 ms | 777.6 k   |
+
+## Key Observations
+1. Worker1 handles more calls (777.6k vs 651k) but with similar total duration
+2. Memory operations dominate execution time:
+   - rte_pktmbuf_data_room_size: 250-300ms self time
+   - mempool/ring ops: 125-150ms each
+3. Unresolved symbol 0x55fb3fa10790 consumes 579ms self time
+4. All functions show 0 active CPU time (measurement artifact)
+
+## Recommendations
+1. Resolve debug symbols for complete analysis
+2. Optimize memory operations:
+   - Increase mempool cache size
+   - Verify NUMA alignment
+3. Balance workload between workers
+
+
+# 4.4 Function Duration Distribution Analysis
+
+![Counters-5](./pics/Counters-5.png "Counters Graph")
+
+
+## Trace Data Summary
+| Metric          | Value   |
+|-----------------|---------|
+| Total Samples   | 31      |
+| Minimum Duration| 172     |
+| Maximum Duration| 185     |
+| Average Duration| 175.45  |
+
+## Duration Distribution
+| Duration | Count |
+|----------|-------|
+| 172      | 1     |
+| 174      | 2     |
+| 175      | 16    |
+| 176      | 8     |
+| 177      | 4     |
+| 185      | 1     |
+
+## Key Observations
+1. **Highly Consistent Performance**
+   - 84% of samples (26/31) fall within 175-177 range
+   - Standard deviation of ~2.3 shows tight clustering
+
+2. **Minor Outliers**
+   - Single low outlier at 172 (-2% from average)
+   - Single high outlier at 185 (+5.4% from average)
+
+3. **Temporal Pattern**
+   - Outliers occur early in trace (first 3 samples)
+   - System appears to stabilize after initial warm-up
+
+## Recommendations
+1. **Investigate Initial Samples**
+   - Examine system state during first 3 operations
+   - Check for cold cache effects or initialization overhead
+
+2. **Monitor for Anomalies**
+   - The 185 duration warrants verification
+   - Check for correlation with system events
+
+3. **Optimization Focus**
+   - Target the consistent 175-177 band as baseline
+   - Minor improvements could yield <1% gains
+
+
+
+
+
+# 4.5 System Trace Analysis
+
+![Counters-7](./pics/Counters-7.png "Counters Graph")
+
+## 1. Function Duration Distribution
+
+
+
+### Key Observations
+- 84% of samples clustered in 175-177 range
+- Single outliers at 172 (-2%) and 185 (+5.4%)
+- System stabilizes after initial warm-up period
+
+
+
+
+
+## 2. System Component Trace
+
+
+### Event Sequence
+1. `lttng_ust_cyg_profilefunc_entry`
+2. Function execution
+3. `lttng_ust_cyg_profilefunc_exit`
+
+## Event Sequence Breakdown
+
+### 1. `lttng_ust_cyg_profilefunc_entry`
+- **Trigger**: When a function begins execution
+- **Captures**:
+  - Timestamp of function entry
+  - Memory address of called function (`0x55fb3fa10790` etc.)
+  - Call site address (`0x55fb3e581da0`)
+  - Thread context (CPU core, PID, TID)
+- **Purpose**: Marks the start of function execution for profiling
+
+### 2. Function Execution
+- **Actual Work**: The traced function performs its operations
+- **Key Characteristics**:
+  - Duration measured between entry/exit events
+  - CPU cycles counted during this period (2040-11804 in trace)
+  - Memory operations visible in address patterns
+
+### 3. `lttng_ust_cyg_profilefunc_exit` 
+- **Trigger**: When function returns
+- **Captures**:
+  - Return timestamp
+  - Final CPU cycle count
+  - Potential return values (not shown in this trace)
+- **Purpose**: Completes the execution timeline for performance analysis
+
+
