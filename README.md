@@ -75,7 +75,7 @@ grep Huge /proc/meminfo
 2.Reserve HugePages (e.g., 1024 x 2MB pages):
 
 ```bash
-echo 1024 | sudo tee /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
+echo 1024 | sudo tree /sys/kernel/mm/hugepages/hugepages-2048kB/nr_hugepages
 ```
 
 3.Mount HugePages:
