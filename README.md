@@ -422,7 +422,7 @@ This chart confirms that:
 | rte_pktmbuf_data_room...| 501ns  | 94.809μs  | 577ns | 347ns      | 1,428,609| 824.97ms  |
 | rte_mempool_get_priv    | 1ns    | 96.386μs  | 193ns | 185ns      | 1,428,610| 276.083ms |
 
-# 4.3 wighted tree viewer
+# 4.3 weighted tree viewer
 
 ![Counters-4](./pics/Counters-4.png "Counters Graph")
 
