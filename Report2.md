@@ -225,7 +225,7 @@ The dominant function is pkt_burst_io_forward:
 
 </center>
 
-MAX_PKT_BURST is the number of packets that can be received in a burst.
+MAX_PKT_BURST is the number of burst that used for buffering.
 
 pkts_burst is used to store received packets.
 
@@ -238,7 +238,7 @@ nb_rx = common_fwd_stream_receive(fs, pkts_burst, nb_pkt_per_burst);
 
 2. Checking package receipt:
 if (unlikely(nb_rx == 0))
-    return false;
+    return false; (the unlikely is a function that predicts the fastest path for the flow of the process).
 
 3. Sending packages:
 common_fwd_stream_transmit(fs, pkts_burst, nb_rx);
