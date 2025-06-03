@@ -96,9 +96,6 @@ rte_eth_rx_burst() may try several times to return a packet (poll loop).
 If packets come from tap0 or tap1, kernel-space may introduce a lot of latency.
 This will cause the packet to take longer than expected to receive.
 
-* Latency from the peer (the program that generates the packet)
-If the peer does not send the packet on time (for example, the other program is slow), you will be stuck on receive.
-
 <center>
 
 ![Figure-8](./pics/pcap-8.png "Figure 8")
@@ -175,7 +172,6 @@ This supports your earlier observation: the application alternates between activ
 3. Idle Gaps: White vertical areas (or very low spikes) suggest few or no significant function calls — likely waiting or polling with no work (e.g., empty RX burst returns).
 
 To optimize performance:
- * Use rx batching to reduce the cost of each call.
  * In low-load conditions, also consider the interrupt-based model.
 
 ### Function Duration Distribution
@@ -199,10 +195,8 @@ Functions like rte_ethdev_trace_rx_burst_empty that take a long time may be due 
 
 **Checking the effectiveness of Tracing:** The rte_trace_feature_is_enabled and rte_ethdev_trace_rx_burst_empty functions are present and are time-consuming. If tracing is disabled or reduced, latency may be reduced.
 
-**Identify jitter or fluctuations:** The presence of functions with times much higher than the average (e.g. >3ms) indicates jitter in the processing behavior. This is important in real-time or high-performance systems and it is necessary to investigate why the delay is sometimes so high.
-
 **For better performance:**
-* Turn off LD_PRELOAD or remove feature tracing
+* Remove feature tracing
 * Ring/mempool optimization because functions like rte_eth_rx_burst are heavily dependent on mempool settings.
 
 ### Statistics
@@ -233,10 +227,9 @@ The dominant function is pkt_burst_io_forward:
 
 MAX_PKT_BURST is the number of packets that can be received in a burst.
 
-This array is used to store received packets.
-uint16_t nb_rx;
+pkts_burst is used to store received packets.
 
-Keeps track of the number of packets received.
+"uint16_t nb_rx" keeps track of the number of packets received.
 
 
 1. Receiving packages:
