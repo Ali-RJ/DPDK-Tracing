@@ -64,6 +64,7 @@ This function reads packets from the TAP file descriptor and sends them to the p
 
   These show that the packets that were sent were freed from memory.
 
+### Function Duration Statistics:
 <center>
 
 ![Figure-3](./pics/pcap-4.png "Figure 3")
