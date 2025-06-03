@@ -146,10 +146,12 @@ This leads to:
 <center>
 
 ![Figure-10](./pics/pcap-6.jpg "Figure 10")
+
 *Measuring the idle time is 12 ms*
 
 
 ![Figure-11](./pics/pcap-9.jpg "Figure 11")
+
 *Measuring the packet sending and receiving  time is 2.8 ms*
 
 </center>
