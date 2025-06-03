@@ -44,7 +44,8 @@ This function reads packets from the TAP file descriptor and sends them to the p
 
   These functions are related to receiving packets from the NIC (or TAP).
 
-* pkt_burst_io_forward ← The main path that takes the packet from RX and prepares it for transmission
+* pkt_burst_io_forward ← The main path that takes the packet from RX and prepares it for transmission. This function in testpmd is designed to transmit packets in forward mode. When testpmd is operating in forward mode , packets received from a port need to be sent to another port — and this function is responsible for transmitting those packets.
+
 
 * TX path:
   - common_fwd_stream_transmit
@@ -62,15 +63,6 @@ This function reads packets from the TAP file descriptor and sends them to the p
   - rte_mempool_put_bulk
 
   These show that the packets that were sent were freed from memory.
-<center>
-
-![Figure-2](./pics/pcap-2.jpg "Figure 2")
-
-</center>
-This function in testpmd is designed to transmit packets in forward mode. When testpmd is operating in forward mode , packets received from a port need to be sent to another port — and this function is responsible for transmitting those packets.
-"pkt_burst_io_forward" ⇨ The main path that takes the packet from RX and prepares it for transmission.
-
-After analysing the call graph, flame graph, flame chart and etc. We find out blah blah blah.
 
 <center>
 
